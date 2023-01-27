@@ -1,6 +1,8 @@
 import cv from "@techstark/opencv-js";
 import { Tensor } from "onnxruntime-web";
-import { renderBoxes } from "./renderBox";
+import { renderBoxes, Colors } from "./renderBox";
+
+const colors = new Colors();
 
 /**
  * Detect Image
@@ -21,40 +23,107 @@ export const detectImage = async (
   scoreThreshold,
   inputShape
 ) => {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); // clean canvas
+
   const [modelWidth, modelHeight] = inputShape.slice(2);
+  const maxSize = Math.max(modelWidth, modelHeight);
   const [input, xRatio, yRatio] = preprocessing(image, modelWidth, modelHeight);
 
   const tensor = new Tensor("float32", input.data32F, inputShape); // to ort.Tensor
-  const config = new Tensor("float32", new Float32Array([topk, iouThreshold, scoreThreshold])); // nms config tensor
-  const { output0 } = await session.net.run({ images: tensor }); // run session and get output layer
+  const config = new Tensor(
+    "float32",
+    new Float32Array([
+      80, // num class
+      topk, // topk per class
+      iouThreshold, // iou threshold
+      scoreThreshold, // score threshold
+    ])
+  ); // nms config tensor
+  const { output0, output1 } = await session.net.run({ images: tensor }); // run session and get output layer
   const { selected } = await session.nms.run({ detection: output0, config: config }); // perform nms and filter boxes
 
   const boxes = [];
+  const overlay = cv.Mat.zeros(modelHeight, modelWidth, cv.CV_8UC4);
 
   // looping through output
   for (let idx = 0; idx < selected.dims[1]; idx++) {
     const data = selected.data.slice(idx * selected.dims[2], (idx + 1) * selected.dims[2]); // get rows
-    const box = data.slice(0, 4);
-    const scores = data.slice(4); // classes probability scores
+    let box = data.slice(0, 4);
+    const scores = data.slice(4, 84); // classes probability scores
     const score = Math.max(...scores); // maximum probability scores
     const label = scores.indexOf(score); // class id of maximum probability scores
+    const color = colors.get(label); // get color
 
-    const [x, y, w, h] = [
-      (box[0] - 0.5 * box[2]) * xRatio, // upscale left
-      (box[1] - 0.5 * box[3]) * yRatio, // upscale top
-      box[2] * xRatio, // upscale width
-      box[3] * yRatio, // upscale height
-    ]; // keep boxes in maxSize range
+    box = overflowBoxes(
+      [
+        box[0] - 0.5 * box[2], // before upscale x
+        box[1] - 0.5 * box[3], // before upscale y
+        box[2], // before upscale w
+        box[3], // before upscale h
+      ],
+      maxSize
+    ); // keep boxes in maxSize range
+
+    const [x, y, w, h] = overflowBoxes(
+      [
+        Math.floor(box[0] * xRatio), // upscale left
+        Math.floor(box[1] * yRatio), // upscale top
+        Math.floor(box[2] * xRatio), // upscale width
+        Math.floor(box[3] * yRatio), // upscale height
+      ],
+      maxSize
+    ); // keep boxes in maxSize range
 
     boxes.push({
       label: label,
       probability: score,
+      color: color,
       bounding: [x, y, w, h], // upscale box
     }); // update boxes to draw later
+
+    const mask = new Tensor(
+      "float32",
+      new Float32Array([
+        ...box, // original scale box
+        ...data.slice(84), // mask data
+      ])
+    ); // mask input
+    const maskConfig = new Tensor(
+      "float32",
+      new Float32Array([
+        maxSize,
+        x, // upscale x
+        y, // upscale y
+        w, // upscale width
+        h, // upscale height
+        ...Colors.hexToRgba(color, 120), // color in RGBA
+      ])
+    ); // mask config
+    const { mask_filter } = await session.mask.run({
+      detection: mask,
+      mask: output1,
+      config: maskConfig,
+    }); // get mask
+
+    const mask_mat = cv.matFromArray(
+      mask_filter.dims[0],
+      mask_filter.dims[1],
+      cv.CV_8UC4,
+      mask_filter.data
+    ); // mask result to Mat
+
+    cv.addWeighted(overlay, 1, mask_mat, 1, 0, overlay); // Update mask overlay
+    mask_mat.delete(); // delete unused Mat
   }
 
-  renderBoxes(canvas, boxes); // Draw boxes
+  const mask_img = new ImageData(new Uint8ClampedArray(overlay.data), overlay.cols, overlay.rows); // create image data from mask overlay
+  ctx.putImageData(mask_img, 0, 0); // put ImageData data to canvas
+
+  renderBoxes(ctx, boxes); // Draw boxes
+
   input.delete(); // delete unused Mat
+  overlay.delete(); // delete unused Mat
 };
 
 /**
@@ -62,12 +131,16 @@ export const detectImage = async (
  * @param {HTMLImageElement} source image source
  * @param {Number} modelWidth model input width
  * @param {Number} modelHeight model input height
+ * @param {Number} stride model stride
  * @return preprocessed image and configs
  */
-const preprocessing = (source, modelWidth, modelHeight) => {
+const preprocessing = (source, modelWidth, modelHeight, stride = 32) => {
   const mat = cv.imread(source); // read from img tag
   const matC3 = new cv.Mat(mat.rows, mat.cols, cv.CV_8UC3); // new image matrix
   cv.cvtColor(mat, matC3, cv.COLOR_RGBA2BGR); // RGBA to BGR
+
+  const [w, h] = divStride(stride, matC3.cols, matC3.rows);
+  cv.resize(matC3, matC3, new cv.Size(w, h));
 
   // padding image to [n x n] dim
   const maxSize = Math.max(matC3.rows, matC3.cols); // get max size from width and height
@@ -93,4 +166,37 @@ const preprocessing = (source, modelWidth, modelHeight) => {
   matPad.delete();
 
   return [input, xRatio, yRatio];
+};
+
+/**
+ * Get divisible image size by stride
+ * @param {Number} stride
+ * @param {Number} width
+ * @param {Number} height
+ * @returns {Number[2]} image size [w, h]
+ */
+const divStride = (stride, width, height) => {
+  if (width % stride !== 0) {
+    if (width % stride >= stride / 2) width = (Math.floor(width / stride) + 1) * stride;
+    else width = Math.floor(width / stride) * stride;
+  }
+  if (height % stride !== 0) {
+    if (height % stride >= stride / 2) height = (Math.floor(height / stride) + 1) * stride;
+    else height = Math.floor(height / stride) * stride;
+  }
+  return [width, height];
+};
+
+/**
+ * Handle overflow boxes based on maxSize
+ * @param {Number[4]} box box in [x, y, w, h] format
+ * @param {Number} maxSize
+ * @returns non overflow boxes
+ */
+const overflowBoxes = (box, maxSize) => {
+  box[0] = box[0] >= 0 ? box[0] : 0;
+  box[1] = box[1] >= 0 ? box[1] : 0;
+  box[2] = box[0] + box[2] <= maxSize ? box[2] : maxSize - box[0];
+  box[3] = box[1] + box[3] <= maxSize ? box[3] : maxSize - box[1];
+  return box;
 };

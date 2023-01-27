@@ -5,12 +5,7 @@ import labels from "./labels.json";
  * @param {HTMLCanvasElement} canvas canvas tag reference
  * @param {Array[Object]} boxes boxes array
  */
-export const renderBoxes = (canvas, boxes) => {
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); // clean canvas
-
-  const colors = new Colors();
-
+export const renderBoxes = (ctx, boxes) => {
   // font configs
   const font = `${Math.max(
     Math.round(Math.max(ctx.canvas.width, ctx.canvas.height) / 40),
@@ -21,13 +16,10 @@ export const renderBoxes = (canvas, boxes) => {
 
   boxes.forEach((box) => {
     const klass = labels[box.label];
-    const color = colors.get(box.label);
+    const color = box.color;
     const score = (box.probability * 100).toFixed(1);
     const [x1, y1, width, height] = box.bounding;
 
-    // draw box.
-    ctx.fillStyle = Colors.hexToRgba(color, 0.2);
-    ctx.fillRect(x1, y1, width, height);
     // draw border box
     ctx.strokeStyle = color;
     ctx.lineWidth = Math.max(Math.min(ctx.canvas.width, ctx.canvas.height) / 200, 2.5);
@@ -51,7 +43,7 @@ export const renderBoxes = (canvas, boxes) => {
   });
 };
 
-class Colors {
+export class Colors {
   // ultralytics color palette https://ultralytics.com/
   constructor() {
     this.palette = [
@@ -84,9 +76,7 @@ class Colors {
   static hexToRgba = (hex, alpha) => {
     var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result
-      ? `rgba(${[parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)].join(
-          ", "
-        )}, ${alpha})`
+      ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16), alpha]
       : null;
   };
 }
