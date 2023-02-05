@@ -13,7 +13,7 @@ const App = () => {
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Configs
+  // configs
   const modelName = "yolov8n-seg.onnx";
   const modelInputShape = [1, 3, 640, 640];
   const topk = 100;
@@ -25,9 +25,9 @@ const App = () => {
     // create session
     setLoading("Loading YOLOv8 model...");
     const [yolov8, nms, mask] = await Promise.all([
-      InferenceSession.create(`${process.env.PUBLIC_URL}/model/${modelName}`),
-      InferenceSession.create(`${process.env.PUBLIC_URL}/model/nms-yolov8.onnx`),
-      InferenceSession.create(`${process.env.PUBLIC_URL}/model/mask-yolov8-seg.onnx`),
+      InferenceSession.create(`${process.env.PUBLIC_URL}/model/${modelName}`), // main model
+      InferenceSession.create(`${process.env.PUBLIC_URL}/model/nms-yolov8.onnx`), // nms op
+      InferenceSession.create(`${process.env.PUBLIC_URL}/model/mask-yolov8-seg.onnx`), // masking post-process
     ]);
 
     // warmup main model

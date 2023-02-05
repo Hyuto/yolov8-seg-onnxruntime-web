@@ -91,4 +91,5 @@ Use another YOLOv8 model.
 ## Reference
 
 - https://github.com/ultralytics/ultralytics
+- https://github.com/Hyuto/yolov8-onnxruntime-web
 - https://github.com/Hyuto/yolov5-seg-onnxruntime-web

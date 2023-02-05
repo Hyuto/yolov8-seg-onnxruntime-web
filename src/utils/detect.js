@@ -27,8 +27,8 @@ export const detectImage = async (
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); // clean canvas
 
   const [modelWidth, modelHeight] = inputShape.slice(2);
-  const maxSize = Math.max(modelWidth, modelHeight);
-  const [input, xRatio, yRatio] = preprocessing(image, modelWidth, modelHeight);
+  const maxSize = Math.max(modelWidth, modelHeight); // max size in input model
+  const [input, xRatio, yRatio] = preprocessing(image, modelWidth, modelHeight); // preprocess frame
 
   const tensor = new Tensor("float32", input.data32F, inputShape); // to ort.Tensor
   const config = new Tensor(
@@ -40,17 +40,17 @@ export const detectImage = async (
       scoreThreshold, // score threshold
     ])
   ); // nms config tensor
-  const { output0, output1 } = await session.net.run({ images: tensor }); // run session and get output layer
+  const { output0, output1 } = await session.net.run({ images: tensor }); // run session and get output layer. out1: detect layer, out2: seg layer
   const { selected } = await session.nms.run({ detection: output0, config: config }); // perform nms and filter boxes
 
-  const boxes = [];
-  const overlay = cv.Mat.zeros(modelHeight, modelWidth, cv.CV_8UC4);
+  const boxes = []; // ready to draw boxes
+  const overlay = cv.Mat.zeros(modelHeight, modelWidth, cv.CV_8UC4); // create overlay to draw segmentation object
 
   // looping through output
   for (let idx = 0; idx < selected.dims[1]; idx++) {
     const data = selected.data.slice(idx * selected.dims[2], (idx + 1) * selected.dims[2]); // get rows
-    let box = data.slice(0, 4);
-    const scores = data.slice(4, 84); // classes probability scores
+    let box = data.slice(0, 4); // det boxes
+    const scores = data.slice(4, 84); // det classes probability scores
     const score = Math.max(...scores); // maximum probability scores
     const label = scores.indexOf(score); // class id of maximum probability scores
     const color = colors.get(label); // get color
@@ -73,7 +73,7 @@ export const detectImage = async (
         Math.floor(box[3] * yRatio), // upscale height
       ],
       maxSize
-    ); // keep boxes in maxSize range
+    ); // upscale boxes
 
     boxes.push({
       label: label,
@@ -104,7 +104,7 @@ export const detectImage = async (
       detection: mask,
       mask: output1,
       config: maskConfig,
-    }); // get mask
+    }); // perform post-process to get mask
 
     const mask_mat = cv.matFromArray(
       mask_filter.dims[0],
@@ -113,14 +113,14 @@ export const detectImage = async (
       mask_filter.data
     ); // mask result to Mat
 
-    cv.addWeighted(overlay, 1, mask_mat, 1, 0, overlay); // Update mask overlay
+    cv.addWeighted(overlay, 1, mask_mat, 1, 0, overlay); // add mask to overlay
     mask_mat.delete(); // delete unused Mat
   }
 
   const mask_img = new ImageData(new Uint8ClampedArray(overlay.data), overlay.cols, overlay.rows); // create image data from mask overlay
-  ctx.putImageData(mask_img, 0, 0); // put ImageData data to canvas
+  ctx.putImageData(mask_img, 0, 0); // put overlay to canvas
 
-  renderBoxes(ctx, boxes); // Draw boxes
+  renderBoxes(ctx, boxes); // draw boxes after overlay added to canvas
 
   input.delete(); // delete unused Mat
   overlay.delete(); // delete unused Mat
