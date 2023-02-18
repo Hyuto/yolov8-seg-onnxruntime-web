@@ -88,6 +88,10 @@ Use another YOLOv8 model.
    ```
 4. Done! 😊
 
+**Note: Custom Trained YOLOv8 Segmentation Models**
+
+Please update `src/utils/labels.json` with your YOLOv8 Segmentation classes.
+
 ## Reference
 
 - https://github.com/ultralytics/ultralytics

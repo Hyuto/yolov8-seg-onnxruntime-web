@@ -1,5 +1,3 @@
-import labels from "./labels.json";
-
 /**
  * Render prediction boxes
  * @param {HTMLCanvasElement} canvas canvas tag reference
@@ -15,7 +13,7 @@ export const renderBoxes = (ctx, boxes) => {
   ctx.textBaseline = "top";
 
   boxes.forEach((box) => {
-    const klass = labels[box.label];
+    const klass = box.label;
     const color = box.color;
     const score = (box.probability * 100).toFixed(1);
     const [x1, y1, width, height] = box.bounding;
