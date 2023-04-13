@@ -46,7 +46,11 @@ export const detectImage = async (
   const { selected } = await session.nms.run({ detection: output0, config: config }); // perform nms and filter boxes
 
   const boxes = []; // ready to draw boxes
-  const overlay = cv.Mat.zeros(modelHeight, modelWidth, cv.CV_8UC4); // create overlay to draw segmentation object
+  let overlay = new Tensor("uint8", new Uint8Array(modelHeight * modelWidth * 4), [
+    modelHeight,
+    modelWidth,
+    4,
+  ]); // create overlay to draw segmentation object
 
   // looping through output
   for (let idx = 0; idx < selected.dims[1]; idx++) {
@@ -106,26 +110,18 @@ export const detectImage = async (
       detection: mask,
       mask: output1,
       config: maskConfig,
+      overlay: overlay,
     }); // perform post-process to get mask
 
-    const mask_mat = cv.matFromArray(
-      mask_filter.dims[0],
-      mask_filter.dims[1],
-      cv.CV_8UC4,
-      mask_filter.data
-    ); // mask result to Mat
-
-    cv.addWeighted(overlay, 1, mask_mat, 1, 0, overlay); // add mask to overlay
-    mask_mat.delete(); // delete unused Mat
+    overlay = mask_filter;
   }
 
-  const mask_img = new ImageData(new Uint8ClampedArray(overlay.data), overlay.cols, overlay.rows); // create image data from mask overlay
+  const mask_img = new ImageData(new Uint8ClampedArray(overlay.data), modelHeight, modelWidth); // create image data from mask overlay
   ctx.putImageData(mask_img, 0, 0); // put overlay to canvas
 
   renderBoxes(ctx, boxes); // draw boxes after overlay added to canvas
 
   input.delete(); // delete unused Mat
-  overlay.delete(); // delete unused Mat
 };
 
 /**

@@ -45,7 +45,7 @@
     "url": "https://github.com/Hyuto/yolov8-seg-onnxruntime-web/issues"
   },
   "devDependencies": {
-    "@craco/craco": "^7.0.0",
+    "@craco/craco": "^7.1.0",
     "copy-webpack-plugin": "^11.0.0",
     "gh-pages": "^4.0.0"
   }
