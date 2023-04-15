@@ -36,7 +36,7 @@ export const detectImage = async (
   const config = new Tensor(
     "float32",
     new Float32Array([
-      80, // num class
+      numClass, // num class
       topk, // topk per class
       iouThreshold, // iou threshold
       scoreThreshold, // score threshold
@@ -113,7 +113,7 @@ export const detectImage = async (
       overlay: overlay,
     }); // perform post-process to get mask
 
-    overlay = mask_filter;
+    overlay = mask_filter; // update overlay with the new one
   }
 
   const mask_img = new ImageData(new Uint8ClampedArray(overlay.data), modelHeight, modelWidth); // create image data from mask overlay

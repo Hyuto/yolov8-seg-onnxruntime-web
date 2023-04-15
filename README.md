@@ -44,17 +44,13 @@ size       : 14 Mb
 
 ONNX model to perform NMS operator [CUSTOM].
 
-```
-nms-yolov8.onnx
-```
+[![nms-yolov8.onnx](https://img.shields.io/badge/nms--yolov8.onnx-black?logo=onnx)](https://netron.app/?url=https://raw.githubusercontent.com/Hyuto/yolov8-seg-onnxruntime-web/master/public/model/nms-yolov8.onnx)
 
 **Mask**
 
 ONNX model to produce mask for every object detected [CUSTOM].
 
-```
-mask-yolov8-seg.onnx
-```
+[![mask-yolov8-seg.onnx](https://img.shields.io/badge/mask--yolov8--seg.onnx-black?logo=onnx)](https://netron.app/?url=https://raw.githubusercontent.com/Hyuto/yolov8-seg-onnxruntime-web/master/public/model/mask-yolov8-seg.onnx)
 
 ## Use another model
 
